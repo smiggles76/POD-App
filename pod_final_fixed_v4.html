@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>POD - Proof of Delivery (Final Fixed v4)</title>
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--text:#111;--muted:#666;--accent:#1a73e8;--border:#e5e7eb;--danger:#ef4444}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif}
+  header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--border);z-index:40}
+  .wrap{max-width:960px;margin:0 auto;padding:12px}
+  h1{font-size:20px;margin:6px 0}
+  .grid{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px 0}
+  input[type="text"],input[type="datetime-local"],textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:15px}
+  textarea{min-height:80px;resize:vertical}
+  .btn{appearance:none;border:1px solid var(--border);background:#fff;padding:10px 12px;border-radius:10px;font-weight:600;font-size:14px}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+  .btn.small{padding:7px 10px;font-size:13px}
+  .flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .muted{color:var(--muted);font-size:13px}
+  .hidden{display:none}
+  .combo{position:relative}
+  .combo .list{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);
+    border-radius:8px;margin-top:6px;max-height:180px;overflow:auto;z-index:25;box-shadow:0 8px 24px rgba(0,0,0,.08);display:none}
+  .combo .list div{padding:8px 10px;cursor:pointer}
+  .combo .list div:hover{background:#f3f4f6}
+  .swap{display:flex;gap:8px;align-items:end}
+  canvas.signature{width:100%;height:340px;border:1px dashed var(--border);border-radius:10px;background:#fff;touch-action:none}
+  .list-item{border:1px solid var(--border);border-radius:10px;padding:12px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .logo-preview{max-height:60px;max-width:220px;object-fit:contain}
+  @media (max-width:720px){.row{grid-template-columns:1fr}}
+  #quickSign{position:fixed;inset:0;background:#fff;z-index:100;display:none;flex-direction:column;padding:12px}
+  #quickCanvas{flex:1;border:1px dashed var(--border);background:#fff;border-radius:10px;touch-action:none}
+  .hint{color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:8px 10px;border-radius:8px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap flex" style="justify-content:space-between">
+    <h1>Proof of Delivery</h1>
+    <div class="flex">
+      <button class="btn small" id="btnQuick">Quick Sign</button>
+      <button class="btn small" id="btnList">Saved PODs</button>
+      <button class="btn small" id="btnNew">New POD</button>
+      <button class="btn small" id="btnSettings">Settings</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap grid">
+
+  <section class="card" id="formCard">
+    <div class="row">
+      <div><label>Date & Time</label><input type="datetime-local" id="dt"></div>
+      <div><label>Delivery Reference</label><input type="text" id="ref" placeholder="e.g. INV 12345"></div>
+    </div>
+
+    <div class="row">
+      <div class="combo"><label>Originator</label><input type="text" id="originator" autocomplete="off" placeholder="Type or pick..."><div class="list" id="originatorList"></div></div>
+      <div class="swap" style="gap:8px">
+        <div class="combo" style="flex:1"><label>Delivery Location</label><input type="text" id="location" autocomplete="off" placeholder="Type or pick..."><div class="list" id="locationList"></div></div>
+        <button class="btn small" id="btnSwap" title="Swap Originator & Delivery Location">↔︎ Swap</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><label>Receiver (print name)</label><input type="text" id="receiver" placeholder="Full name"></div>
+      <div>
+        <label>GPS Location</label>
+        <div class="flex"><button class="btn small" id="btnGPS">Get GPS</button><span class="muted" id="gpsText">-</span></div>
+        <div id="gpsHint" class="hint hidden" style="margin-top:6px">GPS is blocked when the file is opened from device storage. To enable, host it on an HTTPS link (e.g. GitHub Pages/Drive) and add to Home Screen, or enter GPS manually in Notes.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><label>Logo (optional)</label><input type="file" id="logoFile" accept="image/*"><img id="logoPreview" class="logo-preview hidden" alt="Logo"></div>
+      <div><label>Notes</label><textarea id="notes" placeholder="Gatehouse, condition, packages, etc."></textarea></div>
+    </div>
+
+    <div><label>Signature</label><canvas id="sig" class="signature"></canvas><div class="flex" style="margin-top:6px"><button class="btn small" id="btnClearSig">Clear Signature</button><span class="muted" id="sigInfo"></span></div></div>
+
+    <div class="flex" style="margin-top:10px"><button class="btn primary" id="btnSave">Save POD</button><button class="btn" id="btnPreview">Preview</button></div>
+  </section>
+
+  <section class="card" id="listCard" style="display:none">
+    <h2 style="margin:4px 0 10px 0">Saved PODs</h2>
+    <div id="listWrap" class="grid"></div>
+  </section>
+
+  <section class="card" id="previewCard" style="display:none">
+    <h2 style="margin:4px 0 10px 0">Preview</h2>
+    <div id="preview"></div>
+    <div class="flex" style="margin-top:10px">
+      <button class="btn small" id="btnBack">Back</button>
+      <button class="btn small" id="btnPNG">Export PNG</button>
+      <button class="btn small primary" id="btnPDF">Save as PDF</button>
+      <button class="btn small danger" id="btnDelete">Delete POD</button>
+    </div>
+  </section>
+
+</main>
+
+<div id="quickSign">
+  <h2>Quick Sign</h2>
+  <canvas id="quickCanvas"></canvas>
+  <div class="flex" style="margin-top:10px">
+    <button class="btn primary" id="btnQuickSave">Save Signature</button>
+    <button class="btn" id="btnQuickCancel">Cancel</button>
+  </div>
+</div>
+
+<script>
+const $ = s=>document.querySelector(s);
+const britishStamp = ()=>{ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}-${p(d.getMonth()+1)}-${String(d.getFullYear()).slice(-2)}`; };
+const nowLocalISO = () => { const n=new Date(); n.setMinutes(n.getMinutes()-n.getTimezoneOffset()); return n.toISOString().slice(0,16); };
+const uid = () => 'POD-'+new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
+
+const LS = { pods:'pods_v3', originators:'originators_v2', locations:'locations_v2', logo:'pod_logo_v1' };
+function load(k,fb){ try{return JSON.parse(localStorage.getItem(k))||fb;}catch(e){return fb;} }
+function save(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+function addToList(k,v){ v=(v||'').trim(); if(!v) return; const a=load(k,[]); if(!a.includes(v)){ a.push(v); a.sort((x,y)=>x.localeCompare(y)); save(k,a);} }
+function safeNameKeepSpaces(s){ return (s||'').replace(/[\\/:*?"<>|]/g,'-').trim(); }
+
+function makeCombo(input, list, key){
+  function render(filter=''){ const items=load(key,[]).filter(t=>t.toLowerCase().includes(filter.toLowerCase())); list.innerHTML=''; if(!items.length){ list.style.display='none'; return;} items.forEach(t=>{ const d=document.createElement('div'); d.textContent=t; d.onclick=()=>{ input.value=t; list.style.display='none'; }; list.appendChild(d);}); list.style.display='block'; }
+  input.addEventListener('input', e=>render(e.target.value));
+  input.addEventListener('focus', ()=>render(input.value));
+  input.addEventListener('blur', ()=>setTimeout(()=>list.style.display='none',150));
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ addToList(key,input.value); list.style.display='none'; }});
+  input.addEventListener('change', ()=>addToList(key,input.value));
+  render('');
+}
+(function preload(){ if(load(LS.originators,null)===null) save(LS.originators,['ACME Chemicals Ltd','Hi-Rel Lids Norfolk','Johnson Matthey Bellingham'].sort()); if(load(LS.locations,null)===null) save(LS.locations,['ACME Chemicals Ltd','Hi-Rel Lids Norfolk','Johnson Matthey Bellingham'].sort()); })();
+makeCombo($('#originator'), $('#originatorList'), LS.originators);
+makeCombo($('#location'), $('#locationList'), LS.locations);
+
+let sigData=null, sigTimeISO=null, swapTimeISO=null;
+function initPad(canvas, onFirstStroke){
+  const ctx=canvas.getContext('2d');
+  function reset(){ const r=window.devicePixelRatio||1; canvas.width=canvas.clientWidth*r; canvas.height=340*r; ctx.setTransform(r,0,0,r,0,0); ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.clientWidth,340); }
+  reset(); window.addEventListener('resize', reset);
+  let drawing=false, started=false, last=null;
+  function pos(e){ const rect=canvas.getBoundingClientRect(); const t=e.touches?e.touches[0]:null; return {x:(t?t.clientX:e.clientX)-rect.left, y:(t?t.clientY:e.clientY)-rect.top}; }
+  function start(e){ drawing=true; last=pos(e); e.preventDefault(); }
+  function move(e){ if(!drawing) return; const p=pos(e); ctx.strokeStyle='#111'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; if(!started){ started=true; onFirstStroke&&onFirstStroke(); } e.preventDefault(); }
+  function end(){ drawing=false; if(started){ sigData=canvas.toDataURL('image/png'); if(!sigTimeISO){ sigTimeISO=new Date().toISOString(); $('#sigInfo').textContent='Signed on: '+new Date(sigTimeISO).toLocaleString(); } } }
+  ['mousedown','touchstart','pointerdown'].forEach(ev=>canvas.addEventListener(ev,start,{passive:false}));
+  ['mousemove','touchmove','pointermove'].forEach(ev=>canvas.addEventListener(ev,move,{passive:false}));
+  ['mouseup','mouseleave','touchend','touchcancel','pointerup','pointercancel'].forEach(ev=>canvas.addEventListener(ev,end));
+  return ()=>canvas.toDataURL('image/png');
+}
+let saveFormSig=null;
+function redrawSig(canvas,dataURL){ const ctx=canvas.getContext('2d'); const w=canvas.clientWidth, h=canvas.clientHeight; const r=window.devicePixelRatio||1; canvas.width=w*r; canvas.height=h*r; ctx.setTransform(r,0,0,r,0,0); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); if(!dataURL) return; const img=new Image(); img.onload=()=>{ const s=Math.min(w/img.width,h/img.height); ctx.drawImage(img,(w-img.width*s)/2,(h-img.height*s)/2,img.width*s,img.height*s); }; img.src=dataURL; }
+function initForm(){ saveFormSig=initPad($('#sig'), ()=>{ if(!sigTimeISO){ sigTimeISO=new Date().toISOString(); $('#sigInfo').textContent='Signed on: '+new Date(sigTimeISO).toLocaleString(); } }); if(sigData) redrawSig($('#sig'),sigData); $('#dt').value = nowLocalISO(); }
+initForm();
+$('#btnClearSig').onclick=()=>{ sigData=null; sigTimeISO=null; $('#sigInfo').textContent=''; initForm(); };
+
+// Quick Sign
+const quick=$('#quickSign'); let saveQuickSig=null;
+$('#btnQuick').onclick=()=>{ quick.style.display='flex'; const cv=$('#quickCanvas'); cv.style.height=(window.innerHeight-120)+'px'; saveQuickSig=initPad(cv, ()=>{ if(!sigTimeISO){ sigTimeISO=new Date().toISOString(); } }); };
+$('#btnQuickCancel').onclick=()=> quick.style.display='none';
+$('#btnQuickSave').onclick=()=>{ if(saveQuickSig){ sigData=saveQuickSig(); $('#sigInfo').textContent='Signed on: '+new Date(sigTimeISO).toLocaleString()+(swapTimeISO?' • Swapped on: '+new Date(swapTimeISO).toLocaleString():''); redrawSig($('#sig'),sigData); } quick.style.display='none'; };
+
+// Swap
+$('#btnSwap').onclick=()=>{ const a=$('#originator').value, b=$('#location').value; $('#originator').value=b; $('#location').value=a; addToList(LS.originators,$('#originator').value); addToList(LS.locations,$('#location').value); swapTimeISO=new Date().toISOString(); $('#sigInfo').textContent = ($('#sigInfo').textContent?$('#sigInfo').textContent+' • ':'')+'Swapped on: '+new Date(swapTimeISO).toLocaleString(); };
+
+// Date init
+$('#dt').value = nowLocalISO();
+
+// GPS
+let gps=null;
+$('#btnGPS').onclick=()=>{
+  if(location.protocol!=='https:' && location.hostname!=='localhost'){ $('#gpsHint').classList.remove('hidden'); }
+  if(!navigator.geolocation){ $('#gpsText').textContent='Not supported'; return; }
+  $('#gpsText').textContent='Getting fix...';
+  navigator.geolocation.getCurrentPosition(p=>{ gps={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy}; $('#gpsText').textContent=gps.lat.toFixed(6)+', '+gps.lon.toFixed(6)+' (±'+Math.round(gps.acc)+' m)'; }, e=>{ $('#gpsText').textContent='Permission denied / unavailable'; $('#gpsHint').classList.remove('hidden'); }, {enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+};
+
+// Logo
+let logo = localStorage.getItem(LS.logo)||null;
+$('#logoFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ logo=r.result; $('#logoPreview').src=logo; $('#logoPreview').classList.remove('hidden'); localStorage.setItem(LS.logo,logo); }; r.readAsDataURL(f); };
+if(logo){ $('#logoPreview').src=logo; $('#logoPreview').classList.remove('hidden'); }
+
+function ensureSig(){ if(!sigData && typeof saveFormSig==='function'){ sigData = saveFormSig(); if(!sigTimeISO){ sigTimeISO = new Date().toISOString(); $('#sigInfo').textContent='Signed on: '+new Date(sigTimeISO).toLocaleString(); } } return !!sigData; }
+function buildPod(requireSignature){ if(requireSignature && !ensureSig()) { alert('Please capture a signature'); return null; } const when=$('#dt').value; if(!when){ alert('Set Date & Time'); return null; } const receiver=$('#receiver').value.trim(); if(!receiver){ alert('Enter Receiver'); return null; } return { id:uid(), whenISO:new Date(when).toISOString(), ref:$('#ref').value.trim(), originator:$('#originator').value.trim(), location:$('#location').value.trim(), receiver, notes:$('#notes').value, gps, logo:localStorage.getItem(LS.logo)||null, sigURL:sigData, sigTimeISO, swapTimeISO }; }
+
+function openPreview(p){ const gpsTxt=p.gps?`${p.gps.lat.toFixed(6)}, ${p.gps.lon.toFixed(6)} (±${Math.round(p.gps.acc)} m)`:'-'; $('#preview').innerHTML = `<div class="flex" style="justify-content:space-between;align-items:center">${p.logo?`<img src="${p.logo}" class="logo-preview">`:'<div></div>'}<div style="text-align:right"><div style="font-weight:800;font-size:20px">PROOF OF DELIVERY</div></div></div><hr style="border:none;border-top:1px solid var(--border);margin:10px 0"><div class="row"><div><strong>Date</strong><div>${new Date(p.whenISO).toLocaleDateString()}</div></div><div><strong>Time</strong><div>${new Date(p.whenISO).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div></div></div><div class="row"><div><strong>Originator</strong><div>${(p.originator||'-').replace(/</g,'&lt;')}</div></div><div><strong>Delivery Location</strong><div>${(p.location||'-').replace(/</g,'&lt;')}</div></div></div><div class="row"><div><strong>Receiver</strong><div>${(p.receiver||'-').replace(/</g,'&lt;')}</div></div><div><strong>Delivery Ref</strong><div>${(p.ref||'-').replace(/</g,'&lt;')}</div></div></div><div><strong>GPS</strong><div>${gpsTxt}</div></div><div style="margin-top:6px"><strong>Notes</strong><div style="white-space:pre-wrap">${(p.notes||'').replace(/</g,'&lt;')}</div></div><div style="margin-top:10px"><strong>Signature</strong><div style="border:1px dashed var(--border);height:240px;display:flex;align-items:center;justify-content:center"><img src="${p.sigURL||''}" style="max-width:100%;max-height:100%"></div><div class="muted" style="margin-top:6px">${p.sigTimeISO?('Signed on: '+new Date(p.sigTimeISO).toLocaleString()):''}${p.swapTimeISO?(' • Swapped on: '+new Date(p.swapTimeISO).toLocaleString()):''}</div></div>`; $('#formCard').style.display='none'; $('#listCard').style.display='none'; $('#previewCard').style.display='block'; }
+
+function makeFileBase(p){ // DD-MM-YY_Originator[_Ref]
+  const date = britishStamp();
+  const origin = safeNameKeepSpaces(p.originator||'Client');
+  const ref = safeNameKeepSpaces(p.ref||'');
+  return ref ? `${date}_${origin}_${ref}` : `${date}_${origin}`;
+}
+
+function toPNG(p){ const DPI=150, Wmm=210, Hmm=297, px=DPI/25.4, W=Math.floor(Wmm*px), H=Math.floor(Hmm*px), M=Math.floor(12*px); const c=document.createElement('canvas'); c.width=W; c.height=H; const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); ctx.strokeStyle='#d1d5db'; ctx.lineWidth=2; ctx.strokeRect(M,M,W-2*M,H-2*M); let x=M+16, y=M+26; ctx.fillStyle='#111'; ctx.font='bold 30px Arial'; ctx.fillText('PROOF OF DELIVERY', x, y); function kv(l,v){ ctx.font='bold 14px Arial'; ctx.fillStyle='#111'; ctx.fillText(l,x,y); ctx.font='14px Arial'; ctx.fillStyle='#111'; ctx.fillText(v||'-', x+170, y); y+=24; } const dt=new Date(p.whenISO); y=M+100; kv('Date', dt.toLocaleDateString()); kv('Time', dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})); kv('Originator', p.originator||'-'); kv('Delivery Location', p.location||'-'); kv('Receiver', p.receiver||'-'); kv('Delivery Ref', p.ref||'-'); const gpsTxt=p.gps?`${p.gps.lat.toFixed(6)}, ${p.gps.lon.toFixed(6)} (±${Math.round(p.gps.acc)} m)`:'-'; kv('GPS', gpsTxt); y+=6; ctx.font='bold 14px Arial'; ctx.fillText('Notes', x, y); y+=18; ctx.font='14px Arial'; wrapText(ctx, p.notes||'', x, y, W-x-M-16, 20); y+=120; ctx.font='bold 14px Arial'; ctx.fillText('Signature', x, y); y+=10; const boxX=x, boxY=y, boxW=W-x-M-16, boxH=190; ctx.strokeStyle='#d1d5db'; ctx.strokeRect(boxX,boxY,boxW,boxH); const img=new Image(); img.onload=()=>{ const pad=12, bw=boxW-2*pad, bh=boxH-2*pad, s=Math.min(bw/img.width,bh/img.height), w=img.width*s, h=img.height*s; ctx.drawImage(img, boxX+pad+(bw-w)/2, boxY+pad+(bh-h)/2, w, h); ctx.font='12px Arial'; ctx.fillStyle='#555'; const lineY=boxY+boxH+18; const signed=p.sigTimeISO?('Signed on: '+new Date(p.sigTimeISO).toLocaleString()):''; const swapped=p.swapTimeISO?(' • Swapped on: '+new Date(p.swapTimeISO).toLocaleString()):''; ctx.fillText(signed+swapped, boxX, lineY); if(p.gps){ ctx.fillText(`Map: https://maps.google.com/?q=${p.gps.lat},${p.gps.lon}`, boxX, lineY+16); } const a=document.createElement('a'); a.download= makeFileBase(p) + '.png'; a.href=c.toDataURL('image/png'); a.click(); }; img.src=p.sigURL||''; }
+
+function toPDF(p){ const pdfName = makeFileBase(p); const dt=new Date(p.whenISO); const gpsTxt=p.gps?`${p.gps.lat.toFixed(6)}, ${p.gps.lon.toFixed(6)} (±${Math.round(p.gps.acc)} m)`:'-'; const win=window.open('', '_blank'); const css=`body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:14mm;background:#fff;color:#111}.page{width:210mm;min-height:297mm;box-sizing:border-box;padding:10mm;margin:0 auto}.head{display:flex;justify-content:space-between;align-items:center}.title{font-size:22px;font-weight:800;text-align:right}.kv{display:grid;grid-template-columns:40mm 1fr;gap:6px 12px;margin-top:8px}.sig{border:1px dashed #ccc;height:48mm;display:flex;align-items:center;justify-content:center;margin-top:6px}.muted{color:#666;font-size:12px}@page{size:A4;margin:10mm}`; const html=`<html><head><meta charset='utf-8'><title>${pdfName}</title><style>${css}</style></head><body><div class='page'><div class='head'><div>${p.logo?`<img style='max-height:18mm;max-width:60mm;object-fit:contain' src='${p.logo}'>`:''}</div><div><div class='title'>PROOF OF DELIVERY</div></div></div><hr style='border:none;border-top:1px solid #e5e7eb;margin:10px 0'><div class='kv'><div><strong>Date</strong></div><div>${dt.toLocaleDateString()}</div><div><strong>Time</strong></div><div>${dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div><div><strong>Originator</strong></div><div>${(p.originator||'-').replace(/</g,'&lt;')}</div><div><strong>Delivery Location</strong></div><div>${(p.location||'-').replace(/</g,'&lt;')}</div><div><strong>Receiver</strong></div><div>${(p.receiver||'-').replace(/</g,'&lt;')}</div><div><strong>Delivery Ref</strong></div><div>${(p.ref||'-').replace(/</g,'&lt;')}</div><div><strong>GPS</strong></div><div>${gpsTxt}</div></div><div style='margin-top:8px'><strong>Notes</strong><div style='white-space:pre-wrap;margin-top:6px'>${(p.notes||'').replace(/</g,'&lt;')}</div></div><div style='margin-top:10px'><strong>Signature</strong><div class='sig'><img src='${p.sigURL||''}' style='max-width:100%;max-height:100%'></div><div class='muted' style='margin-top:6px'>${p.sigTimeISO?('Signed on: '+new Date(p.sigTimeISO).toLocaleString()):''}${p.swapTimeISO?(' • Swapped on: '+new Date(p.swapTimeISO).toLocaleString()):''}</div></div><div class='muted' style='margin-top:10px'>Declaration: Goods received in satisfactory condition unless noted above.</div>${p.gps?`<div class='muted' style='margin-top:6px'>Map: https://maps.google.com/?q=${p.gps.lat},${p.gps.lon}</div>`:''}</div><script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`; win.document.write(html); win.document.close(); }
+
+function ensureSig(){ if(!sigData && typeof saveFormSig==='function'){ sigData = saveFormSig(); if(!sigTimeISO){ sigTimeISO = new Date().toISOString(); $('#sigInfo').textContent='Signed on: '+new Date(sigTimeISO).toLocaleString(); } } return !!sigData; }
+function buildPod(requireSignature){ if(requireSignature && !ensureSig()) { alert('Please capture a signature'); return null; } const when=$('#dt').value; if(!when){ alert('Set Date & Time'); return null; } const receiver=$('#receiver').value.trim(); if(!receiver){ alert('Enter Receiver'); return null; } return { id:uid(), whenISO:new Date(when).toISOString(), ref:$('#ref').value.trim(), originator:$('#originator').value.trim(), location:$('#location').value.trim(), receiver, notes:$('#notes').value, gps, logo:localStorage.getItem(LS.logo)||null, sigURL:sigData, sigTimeISO, swapTimeISO }; }
+
+$('#btnPreview').onclick=()=>{ const pod=buildPod(true); if(pod) openPreview(pod); };
+$('#btnPNG').onclick=()=>{ const pod=buildPod(true); if(pod) toPNG(pod); };
+$('#btnPDF').onclick=()=>{ const pod=buildPod(true); if(pod) toPDF(pod); };
+$('#btnBack').onclick=()=>{ $('#previewCard').style.display='none'; $('#formCard').style.display='block'; };
+
+// Minimal saved list (view only)
+$('#btnList').onclick=()=>{ const all=load(LS.pods,[]); const wrap=$('#listWrap'); wrap.innerHTML=''; if(!all.length){ wrap.innerHTML='<div class="muted">No PODs saved yet (use Save in your previous version, this trimmed v4 focuses on exports)</div>'; } all.forEach(p=>{ const d=new Date(p.whenISO); const div=document.createElement('div'); div.className='list-item'; div.innerHTML=`<div><div style="font-weight:700">${(p.originator||'-')} → ${(p.location||'-')}</div><div class="muted">${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} • Ref: ${p.ref||'-'}</div></div><div class="flex"><button class="btn small" data-id="${p.id}" data-act="view">View</button></div>`; wrap.appendChild(div); }); $('#listCard').style.display='block'; $('#formCard').style.display='none'; };
+$('#btnNew').onclick=()=>{ $('#listCard').style.display='none'; $('#formCard').style.display='block'; $('#dt').value = nowLocalISO(); };
+
+/* text wrapping helper */
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = (text||'').split(/\s+/); let line='';
+  for(let i=0;i<words.length;i++){ const test=line+words[i]+' '; if(ctx.measureText(test).width>maxWidth && i>0){ ctx.fillText(line,x,y); line=words[i]+' '; y+=lineHeight; }else{ line=test; } }
+  if(line) ctx.fillText(line,x,y);
+}
+</script>
+</body>
+</html>
